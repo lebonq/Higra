@@ -65,6 +65,22 @@ namespace hierarchy_core {
         REQUIRE((mst_edge_map == array_1d<int>({1, 0, 3, 4, 2})));
     }
 
+    TEST_CASE("boruvka binary partition tree", "[hierarchy_core]") {
+        auto graph = get_4_adjacency_graph({2, 3});
+
+        array_1d<double> edge_weights{1, 0, 2, 1, 1, 1, 2};
+
+        auto res = bpt_boruvka(graph, edge_weights);
+        auto &tree = res.tree;
+        auto &altitudes = res.altitudes;
+        auto &mst_edge_map = res.mst_edge_map;
+
+        REQUIRE(num_vertices(tree) == 11);
+        REQUIRE(num_edges(tree) == 10);
+        REQUIRE(xt::allclose(hg::parents(tree), xt::xarray<unsigned int>({6, 7, 9, 6, 8, 9, 7, 8, 10, 10, 10})));
+        REQUIRE(xt::allclose(altitudes, xt::xarray<double>({0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 2})));
+        REQUIRE((mst_edge_map == array_1d<int>({1, 0, 3, 4, 2})));
+    }
 
     TEST_CASE("simplify tree", "[hierarchy_core]") {
 

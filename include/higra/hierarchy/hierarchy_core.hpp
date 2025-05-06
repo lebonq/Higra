@@ -102,6 +102,57 @@ namespace hg {
                     parents,
                     std::move(mst_edge_map));
         };
+
+        template<typename E1, typename E2, typename T>
+        auto bpt_boruvka_from_edges(const xt::xexpression<E1> &xsources,
+                                             const xt::xexpression<E2> &xtargets,
+                                             const xt::xexpression<T> &xweight,
+                                             const index_t num_vertices) {
+            HG_TRACE();
+            auto &sorted_edge_indices = xweight.derived_cast();
+            auto &sources = xsources.derived_cast();
+            auto &targets = xtargets.derived_cast();
+            hg_assert_1d_array(sources);
+            hg_assert_same_shape(sources, targets);
+            hg_assert_same_shape(sources, sorted_edge_indices);
+            hg_assert_integral_value_type(sources);
+            hg_assert_integral_value_type(targets);
+            hg_assert_integral_value_type(sorted_edge_indices);
+
+            auto num_edge_mst = num_vertices - 1;
+
+            array_1d<index_t> mst_edge_map = xt::empty<index_t>({num_edge_mst});
+
+            union_find uf(num_vertices);
+
+            array_1d<index_t> roots = xt::arange<index_t>(num_vertices);
+            array_1d<index_t> parents = xt::arange<index_t>(num_vertices * 2 - 1);
+
+            index_t num_nodes = num_vertices;
+            index_t num_edge_found = 0;
+            index_t i = 0;
+
+            while (num_edge_found < num_edge_mst && i < (index_t) sorted_edge_indices.size()) {
+                auto ei = sorted_edge_indices[i];
+                auto c1 = uf.find(sources(ei));
+                auto c2 = uf.find(targets(ei));
+                if (c1 != c2) {
+                    parents[roots[c1]] = num_nodes;
+                    parents[roots[c2]] = num_nodes;
+                    auto newRoot = uf.link(c1, c2);
+                    roots[newRoot] = num_nodes;
+                    mst_edge_map(num_edge_found) = ei;
+                    num_nodes++;
+                    num_edge_found++;
+                }
+                i++;
+            }
+            hg_assert(num_edge_found == num_edge_mst, "Input graph must be connected.");
+
+            return std::make_pair(
+                    parents,
+                    std::move(mst_edge_map));
+        };
     }
 
     /**
@@ -132,6 +183,56 @@ namespace hg {
         array_1d<index_t> sorted_edges_indices = stable_arg_sort(edge_weights);
 
         auto res = hierarchy_core_internal::bpt_canonical_from_sorted_edges(sources(graph),
+                                                                            targets(graph),
+                                                                            sorted_edges_indices,
+                                                                            num_vertices(graph));
+        auto &parents = res.first;
+        auto &mst_edge_map = res.second;
+
+        auto num_points = num_vertices(graph);
+
+        array_1d<typename T::value_type> levels = xt::zeros<typename T::value_type>({parents.size()});
+        xt::noalias(xt::view(levels, xt::range(num_points, levels.size()))) = xt::index_view(edge_weights,
+                                                                                             mst_edge_map);
+
+        return make_node_weighted_tree_and_mst(
+                tree(std::move(parents)),
+                std::move(levels),
+                std::move(mst_edge_map));
+    };
+
+    /**
+     * Compute the canonical binary partition tree (or binary partition tree by altitude ordering) of the given
+     * edge weighted graph.
+     *
+     * The algorithm returns a tuple composed of:
+     *  - the binary partition tree,
+     *  - the levels of the vertices of the tree,
+     *  - the minimum spanning tree of the given graph that corresponds to this tree.
+     *
+     * Q. Lebon, J. Cousty, Th. Grandpierre, B. Perret. Waterfall-Borůvka based algorithm for binary partition tree
+     *
+     *
+     * @tparam graph_t
+     * @tparam T
+     * @param graph
+     * @param xedge_weights
+     * @return
+     */
+    template <typename graph_t, typename T>
+    auto bpt_boruvka(const graph_t& graph, const xt::xexpression<T>& xedge_weights)
+    {
+        HG_TRACE();
+        auto &edge_weights = xedge_weights.derived_cast();
+        hg_assert_edge_weights(graph, edge_weights);
+        hg_assert_1d_array(edge_weights);
+
+        //array_1d<index_t> sorted_edges_indices = stable_arg_sort(edge_weights);
+        //Create an array sorted_edges_indices with 0 to n
+        array_1d<index_t> sorted_edges_indices = xt::arange(edge_weights.size());
+
+
+        auto res = hierarchy_core_internal::bpt_boruvka_from_edges(sources(graph),
                                                                             targets(graph),
                                                                             sorted_edges_indices,
                                                                             num_vertices(graph));
