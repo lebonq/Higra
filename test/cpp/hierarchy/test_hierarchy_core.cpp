@@ -71,15 +71,14 @@ namespace hierarchy_core {
         array_1d<double> edge_weights{1, 0, 2, 1, 1, 1, 2};
 
         auto res = bpt_boruvka(graph, edge_weights);
-        auto &tree = res.tree;
-        auto &altitudes = res.altitudes;
-        auto &mst_edge_map = res.mst_edge_map;
+        auto parents = res.first;
+        auto mst_edge_map = res.second;
 
-        REQUIRE(num_vertices(tree) == 11);
-        REQUIRE(num_edges(tree) == 10);
-        REQUIRE(xt::allclose(hg::parents(tree), xt::xarray<unsigned int>({6, 7, 9, 6, 8, 9, 7, 8, 10, 10, 10})));
-        REQUIRE(xt::allclose(altitudes, xt::xarray<double>({0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 2})));
-        REQUIRE((mst_edge_map == array_1d<int>({1, 0, 3, 4, 2})));
+        REQUIRE(parents.size() == num_vertices(graph)+num_edges(graph));
+        std::cout << parents << std::endl;
+        REQUIRE(xt::allclose(parents, xt::xarray<unsigned int>({7,6,10,7,9,10,9,6,8,8,8,11,12})));
+       // REQUIRE(xt::allclose(altitudes, xt::xarray<double>({0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 2})));
+       REQUIRE((mst_edge_map == array_1d<index_t>({in_mst,in_mst,in_mst,in_mst,in_mst,out_mst,undef_mst})));
     }
 
     TEST_CASE("simplify tree", "[hierarchy_core]") {

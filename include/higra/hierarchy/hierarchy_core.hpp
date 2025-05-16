@@ -23,6 +23,10 @@
 #include <tuple>
 #include <queue>
 
+#define undef_mst (index_t)0
+#define out_mst (index_t)1
+#define in_mst (index_t)2
+
 namespace hg {
 
     /**
@@ -103,55 +107,326 @@ namespace hg {
                     std::move(mst_edge_map));
         };
 
-        template<typename E1, typename E2, typename T>
-        auto bpt_boruvka_from_edges(const xt::xexpression<E1> &xsources,
-                                             const xt::xexpression<E2> &xtargets,
-                                             const xt::xexpression<T> &xweight,
-                                             const index_t num_vertices) {
+        //create a struct graph
+        template <typename E1, typename E2, typename T>
+        struct graph_boruvka
+        {
+            const xt::xexpression<E1>& xsources;
+            const xt::xexpression<E2>& xtargets;
+            const xt::xexpression<T>& xweight_edges;
+
+            const index_t num_vertices;
+            const index_t num_edges;
+
+            graph_boruvka(const xt::xexpression<E1>& xs,
+                          const xt::xexpression<E2>& xt,
+                          const xt::xexpression<T>& xw,
+                          index_t nv,
+                          index_t ne)
+                : xsources(xs), xtargets(xt), xweight_edges(xw), num_vertices(nv), num_edges(ne)
+            {
+            }
+
+            auto& getSource() { return xsources.derived_cast(); }
+            auto& getTarget() { return xtargets.derived_cast(); }
+            auto& getWeight() { return xweight_edges.derived_cast(); }
+            auto getWeight(index_t u) { return xweight_edges.derived_cast()[u]; }
+            //add u to have a total ordering where each edges has a uniqu weight
+        };
+
+        struct IndexedValue {
+            index_t index;
+            index_t bassin;
+            double weight;
+        };
+
+        template <typename E1, typename E2, typename T>
+        void bassin_altitude(graph_boruvka<E1, E2, T> graph_struct, array_1d<index_t>& C, array_1d<index_t>& mst,
+                             array_1d<index_t>& v_altitude, array_1d<index_t>& saddles)
+        {
+            index_t n_edges = graph_struct.num_edges;
+
+            for (auto u = 0; u < n_edges; u++)
+            {
+                auto x = graph_struct.getSource()(u);
+                auto y = graph_struct.getTarget()(u);
+                auto cx = C[x];
+                auto cy = C[y];
+                if (mst[u] == undef_mst && cy != cx)
+                {
+                    auto wu = graph_struct.getWeight(u);
+                    if (v_altitude[cx] >= wu)
+                    {
+                        if (v_altitude[cx] > wu)
+                        {
+                            v_altitude[cx] = wu;
+                            saddles[cx] = u;
+                        }
+                        else if (saddles[cx] > u) //equal so we take the lowest index
+                        {
+                            v_altitude[cx] = wu;
+                            saddles[cx] = u;
+                        }
+                    }
+
+
+                    if (v_altitude[cy] >= wu)
+                    {
+                        if (v_altitude[cy] > wu)
+                        {
+                            v_altitude[cy] = wu;
+                            saddles[cy] = u;
+                        }
+                        else if (saddles[cy] > u)
+                        {
+                            v_altitude[cy] = wu;
+                            saddles[cy] = u;
+                        }
+                    }
+                }
+            }
+        };
+
+        template <typename E1, typename E2, typename T>
+        void InnerBorderDectection(graph_boruvka<E1, E2, T> graph_struct, array_1d<index_t>& C, array_1d<index_t>& mst,
+                                   array_1d<index_t>& v_altitude, array_1d<index_t>& saddles)
+        {
+            index_t n_edges = graph_struct.num_edges;
+            for (auto u = 0; u < n_edges; u++)
+            {
+                if (mst[u] == undef_mst)
+                {
+                    auto x = graph_struct.getSource()(u);
+                    auto y = graph_struct.getTarget()(u);
+                    auto cx = C[x];
+                    auto cy = C[y];
+                    auto wu = graph_struct.getWeight(u);
+                    if (cy == cx)
+                    {
+                        mst[u] = out_mst;
+                    }
+
+                    else if (wu <= v_altitude[cx] || wu <= v_altitude[cy])
+                    {
+                        //u is either an inner or border edge
+                        if (wu < v_altitude[cx] || wu < v_altitude[cy])
+                        {
+                            mst[u] = in_mst;
+                        }
+                        else if (saddles[cy] == u && wu == v_altitude[cy])
+                        {
+                            mst[u] = in_mst;
+                        }
+                        else if (saddles[cx] == u && wu == v_altitude[cx])
+                        {
+                            mst[u] = in_mst;
+                        }
+                    }
+                }
+            }
+        };
+
+        template <typename E1, typename E2, typename T>
+        void ConnectedComponentsLabeling(graph_boruvka<E1, E2, T> graph_struct, array_1d<index_t>& C,
+                                         array_1d<index_t>& mst,
+                                         array_1d<index_t>& v_altitude, array_1d<index_t>& saddles, union_find& uf,
+                                         array_1d<index_t>& B)
+        {
+            index_t n_edges = graph_struct.num_edges;
+            for (auto u = 0; u < n_edges; u++)
+            {
+                if (mst[u] == in_mst && B[u] == -1)
+                {
+                    auto x = uf.find(graph_struct.getSource()(u));
+                    auto y = uf.find(graph_struct.getTarget()(u));
+                    uf.link(x, y);
+                }
+            }
+        };
+
+        template <typename E1, typename E2, typename T>
+        void UpdateParents(graph_boruvka<E1, E2, T> graph_struct, array_1d<index_t>& C, array_1d<index_t>& mst,
+                           array_1d<index_t>& v_altitude, array_1d<index_t>& saddles, union_find& uf,
+                           array_1d<index_t>& B, array_1d<index_t>& parents, index_t n_it)
+        {
+            index_t n_edges = graph_struct.num_edges;
+            index_t n_vertices = graph_struct.num_vertices;
+
+            for (auto u = 0; u < n_edges; u++)
+            {
+                auto x = graph_struct.getSource()(u);
+
+                if (mst[u] == in_mst && B[u] == -1)
+                {
+                    auto cx = C[x];
+                    B[u] = cx + n_it;
+                    parents[u + n_vertices] = saddles[cx] + n_vertices;
+                    if (parents[u + n_vertices] <= n_vertices || parents[u + n_vertices] >= n_edges + n_vertices)
+                    //todo check si c'est bon
+                    {
+                        parents[u + n_vertices] = u + n_vertices;
+                    } //special case last iteration, if one component the parent of the node is itself because we are dealing with the last chain of node from root to a border edge
+                }
+            }
+        };
+
+
+        template <typename E1, typename E2, typename T>
+        void MoveUp(graph_boruvka<E1, E2, T> graph_struct, array_1d<index_t>& C, array_1d<index_t>& mst,
+                    array_1d<index_t>& v_altitude, array_1d<index_t>& saddles, union_find& uf, array_1d<index_t>& B,
+                    array_1d<index_t>& parents, index_t n_it)
+        {
+            index_t n_edges = graph_struct.num_edges;
+            index_t n_vertices = graph_struct.num_vertices;
+
+            for (auto u = 0; u < n_edges; u++)
+            {
+                index_t node = u+n_vertices;
+                while (graph_struct.getWeight(u) > graph_struct.getWeight(parents[node] - n_vertices)) node = parents[node];
+                parents[u+n_vertices] = parents[node];
+                B[u] = B[node-n_vertices];
+            }
+        };
+
+        template <typename E1, typename E2, typename T>
+        void BinarizeTree(graph_boruvka<E1, E2, T> graph_struct, array_1d<index_t>& C, array_1d<index_t>& mst,
+                          array_1d<index_t>& v_altitude, array_1d<index_t>& saddles, union_find& uf,
+                          array_1d<index_t>& B, array_1d<index_t>& parents, index_t n_it)
+        {
+            index_t n_edges = graph_struct.num_edges;
+            index_t n_vertices = graph_struct.num_vertices;
+            hg_assert_same_shape(B,graph_struct.getWeight());
+
+
+
+            // Créer un vecteur d'IndexedValue
+            std::vector<IndexedValue> indexedValues;
+            for (index_t i = 0; i < n_edges; ++i) {
+                indexedValues.push_back({i, B[i], graph_struct.getWeight(i)});
+            }
+
+            // Trier le vecteur d'IndexedValue
+            std::sort(indexedValues.begin(), indexedValues.end(), [](const IndexedValue& a, const IndexedValue& b) {
+                if (a.bassin != b.bassin) {
+                    return a.bassin < b.bassin;
+                } else if (a.weight != b.weight) {
+                    return a.weight < b.weight;
+                } else {
+                    return a.index < b.index;
+                }
+            });
+
+            for (index_t i = 0; i < n_vertices-2; ++i)
+            {
+                auto u = indexedValues[i].index;
+                auto up = indexedValues[i+1].index;
+
+                if (B[u] == B[up] && B[u] != -1)
+                {
+                    parents[u+n_vertices] = up+n_vertices;
+                }
+            }
+        };
+
+        template <typename E1, typename E2, typename T>
+        auto bpt_boruvka_from_edges(const xt::xexpression<E1>& xsources,
+                                    const xt::xexpression<E2>& xtargets,
+                                    const xt::xexpression<T>& xweight_edges,
+                                    const index_t num_vertices, const index_t num_edges)
+        {
             HG_TRACE();
-            auto &sorted_edge_indices = xweight.derived_cast();
-            auto &sources = xsources.derived_cast();
-            auto &targets = xtargets.derived_cast();
+
+            graph_boruvka<E1, E2, T> graph_struct(xsources, xtargets, xweight_edges, num_vertices, num_edges);
+
+            auto& weight_edges = graph_struct.getWeight();
+            auto& sources = graph_struct.getSource();
+            auto& targets = graph_struct.getTarget();
+
             hg_assert_1d_array(sources);
             hg_assert_same_shape(sources, targets);
-            hg_assert_same_shape(sources, sorted_edge_indices);
+            hg_assert_same_shape(sources, weight_edges);
             hg_assert_integral_value_type(sources);
             hg_assert_integral_value_type(targets);
-            hg_assert_integral_value_type(sorted_edge_indices);
+            //hg_assert_integral_value_type(weight_edges);
+
+            auto moreTOneCC = true;
 
             auto num_edge_mst = num_vertices - 1;
+            //output Hierarchy $\mathcall(T)$, here vPar and ePar are the same array parents, to access element 0 of
+            //ePar do parents[0+num_vertices]
+            array_1d<index_t> parents = xt::arange<index_t>({num_vertices + num_edges});
+            //index_t in = 2;
+            //index_t out = 1;
+            //index_t undef = 0;
+            array_1d<index_t> mst({num_edges},undef_mst); //2 in, 1 out, 0 undef
+            array_1d<index_t> B({num_edges}, -1); //-1 undef for B
 
-            array_1d<index_t> mst_edge_map = xt::empty<index_t>({num_edge_mst});
+            array_1d<index_t> C = xt::arange<index_t>(num_vertices);
+
+            array_1d<index_t> vertex_altitudes({num_vertices},INT64_MAX); //TODO Change to type of weight
+            array_1d<index_t> saddles = xt::arange<index_t>(num_vertices);
 
             union_find uf(num_vertices);
 
-            array_1d<index_t> roots = xt::arange<index_t>(num_vertices);
-            array_1d<index_t> parents = xt::arange<index_t>(num_vertices * 2 - 1);
+            //std::cout << "First step outside of loop" << std::endl;
+            index_t n_it = 0;
+            bassin_altitude(graph_struct, C, mst, vertex_altitudes, saddles);
 
-            index_t num_nodes = num_vertices;
-            index_t num_edge_found = 0;
-            index_t i = 0;
-
-            while (num_edge_found < num_edge_mst && i < (index_t) sorted_edge_indices.size()) {
-                auto ei = sorted_edge_indices[i];
-                auto c1 = uf.find(sources(ei));
-                auto c2 = uf.find(targets(ei));
-                if (c1 != c2) {
-                    parents[roots[c1]] = num_nodes;
-                    parents[roots[c2]] = num_nodes;
-                    auto newRoot = uf.link(c1, c2);
-                    roots[newRoot] = num_nodes;
-                    mst_edge_map(num_edge_found) = ei;
-                    num_nodes++;
-                    num_edge_found++;
-                }
-                i++;
+            //set the parents of the tree leaves
+            for (auto x = 0; x < num_vertices; x++)
+            {
+                parents[x] = saddles[x] + num_vertices;
             }
-            hg_assert(num_edge_found == num_edge_mst, "Input graph must be connected.");
 
+            while (moreTOneCC == true)
+            {
+                InnerBorderDectection(graph_struct, C, mst, vertex_altitudes, saddles);
+
+                ConnectedComponentsLabeling(graph_struct, C, mst, vertex_altitudes, saddles, uf, B);
+                auto prev = uf.find(0);
+                moreTOneCC = false;
+                for (auto u = 0; u < num_vertices; u++) //Count CC
+                {
+                    C[u] = uf.find(u);
+                    if (prev != C[u]) moreTOneCC = true;
+                    prev = C[u];
+                    vertex_altitudes[C[u]] = INT64_MAX;
+                    saddles[C[u]] = INT64_MAX;
+                }
+
+                bassin_altitude(graph_struct, C, mst, vertex_altitudes, saddles);
+
+                //std::cout << "Update Parents" << std::endl;
+
+                UpdateParents(graph_struct, C, mst, vertex_altitudes, saddles, uf, B, parents, n_it);
+
+                //for (auto u = 0; u < num_vertices; u++) std::cout << u << " B : " << B[u] << std::endl;
+
+                n_it++;
+            }
+
+            MoveUp(graph_struct, C, mst, vertex_altitudes, saddles,uf,B,parents,n_it);
+
+
+            BinarizeTree(graph_struct,C,mst,vertex_altitudes,saddles,uf,B,parents,n_it);
+
+            /*for (auto u = 0; u < num_vertices + num_edges; u++)
+            {
+                if (u < num_vertices)
+                {
+                    std::cout << "Vertex " << u << " parent : " << parents[u] << std::endl;
+                }
+                else
+                {
+                    std::cout << "Edge " << u << " : " << parents[u] << std::endl;
+                }
+            }*/
+
+            //hg_assert(num_edge_found == num_edge_mst, "Input graph must be connected.");
+            array_1d<index_t> mst_edge_map = xt::empty<index_t>({num_edge_mst});
             return std::make_pair(
-                    parents,
-                    std::move(mst_edge_map));
+                parents,
+                std::move(mst));
         };
     }
 
@@ -194,7 +469,6 @@ namespace hg {
         array_1d<typename T::value_type> levels = xt::zeros<typename T::value_type>({parents.size()});
         xt::noalias(xt::view(levels, xt::range(num_points, levels.size()))) = xt::index_view(edge_weights,
                                                                                              mst_edge_map);
-
         return make_node_weighted_tree_and_mst(
                 tree(std::move(parents)),
                 std::move(levels),
@@ -231,24 +505,15 @@ namespace hg {
         //Create an array sorted_edges_indices with 0 to n
         array_1d<index_t> sorted_edges_indices = xt::arange(edge_weights.size());
 
-
         auto res = hierarchy_core_internal::bpt_boruvka_from_edges(sources(graph),
                                                                             targets(graph),
-                                                                            sorted_edges_indices,
-                                                                            num_vertices(graph));
-        auto &parents = res.first;
-        auto &mst_edge_map = res.second;
+                                                                            xedge_weights,
+                                                                            num_vertices(graph),
+                                                                            num_edges(graph));
+        //auto &parents = res.first;
+        //auto &mst_edge_map = res.second;
 
-        auto num_points = num_vertices(graph);
-
-        array_1d<typename T::value_type> levels = xt::zeros<typename T::value_type>({parents.size()});
-        xt::noalias(xt::view(levels, xt::range(num_points, levels.size()))) = xt::index_view(edge_weights,
-                                                                                             mst_edge_map);
-
-        return make_node_weighted_tree_and_mst(
-                tree(std::move(parents)),
-                std::move(levels),
-                std::move(mst_edge_map));
+        return res;
     };
 
 
