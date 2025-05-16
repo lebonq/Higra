@@ -65,6 +65,21 @@ namespace hierarchy_core {
         REQUIRE((mst_edge_map == array_1d<int>({1, 0, 3, 4, 2})));
     }
 
+    TEST_CASE("boruvka binary partition tree trivial", "[hierarchy_core]") {
+
+        auto graph = get_4_adjacency_graph({1, 2});
+
+        array_1d<double> edge_weights{2};
+
+        auto res = bpt_boruvka(graph, edge_weights);
+        auto parents = res.first;
+        auto mst_edge_map = res.second;
+
+        REQUIRE(parents.size() == num_vertices(graph)+num_edges(graph));
+        REQUIRE(xt::allclose(parents, xt::xarray<unsigned int>({2,2,2})));
+        REQUIRE((mst_edge_map == array_1d<index_t>({in_mst})));
+    }
+
     TEST_CASE("boruvka binary partition tree", "[hierarchy_core]") {
         auto graph = get_4_adjacency_graph({2, 3});
 
@@ -75,10 +90,24 @@ namespace hierarchy_core {
         auto mst_edge_map = res.second;
 
         REQUIRE(parents.size() == num_vertices(graph)+num_edges(graph));
-        std::cout << parents << std::endl;
         REQUIRE(xt::allclose(parents, xt::xarray<unsigned int>({7,6,10,7,9,10,9,6,8,8,8,11,12})));
-       // REQUIRE(xt::allclose(altitudes, xt::xarray<double>({0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 2})));
-       REQUIRE((mst_edge_map == array_1d<index_t>({in_mst,in_mst,in_mst,in_mst,in_mst,out_mst,undef_mst})));
+        // REQUIRE(xt::allclose(altitudes, xt::xarray<double>({0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 2})));
+        REQUIRE((mst_edge_map == array_1d<index_t>({in_mst,in_mst,in_mst,in_mst,in_mst,out_mst,undef_mst})));
+    }
+
+    TEST_CASE("boruvka binary partition tree paper exemple", "[hierarchy_core]") {
+        auto graph = get_4_adjacency_graph({3, 4});
+
+        array_1d<double> edge_weights{6,10,18,1,4,13,14,16,12,15,9,2,7,8,3,17,11};
+
+        auto res = bpt_boruvka(graph, edge_weights);
+        auto parents = res.first;
+        auto mst_edge_map = res.second;
+
+        REQUIRE(parents.size() == num_vertices(graph)+num_edges(graph));
+        REQUIRE(xt::allclose(parents, xt::xarray<unsigned int>({12,15,16,16,13,15,23,23,26,26,24,25,22,21,14,12,17,21,18,19,20,21,13,24,25,17,22,27,28})));
+        // REQUIRE(xt::allclose(altitudes, xt::xarray<double>({0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 2})));
+        REQUIRE((mst_edge_map == array_1d<index_t>({in_mst,in_mst,undef_mst,in_mst,in_mst,in_mst,out_mst,out_mst,out_mst,in_mst,in_mst,in_mst,in_mst,in_mst,in_mst,undef_mst,out_mst})));
     }
 
     TEST_CASE("simplify tree", "[hierarchy_core]") {

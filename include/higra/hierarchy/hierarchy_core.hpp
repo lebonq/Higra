@@ -259,7 +259,7 @@ namespace hg {
                 if (mst[u] == in_mst && B[u] == -1)
                 {
                     auto cx = C[x];
-                    B[u] = cx + n_it;
+                    B[u] = cx + n_it*n_vertices;
                     parents[u + n_vertices] = saddles[cx] + n_vertices;
                     if (parents[u + n_vertices] <= n_vertices || parents[u + n_vertices] >= n_edges + n_vertices)
                     //todo check si c'est bon
@@ -316,7 +316,7 @@ namespace hg {
                 }
             });
 
-            for (index_t i = 0; i < n_vertices-2; ++i)
+            for (index_t i = 0; i < n_edges-2; ++i)
             {
                 auto u = indexedValues[i].index;
                 auto up = indexedValues[i+1].index;
