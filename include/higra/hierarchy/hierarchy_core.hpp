@@ -260,9 +260,9 @@ namespace hg {
                 {
                     auto cx = C[x];
                     B[u] = cx + n_it*n_vertices;
-                    parents[u + n_vertices] = saddles[cx] + n_vertices;
-                    if (parents[u + n_vertices] <= n_vertices || parents[u + n_vertices] >= n_edges + n_vertices)
-                    //todo check si c'est bon
+                    auto new_parent = saddles[cx] + n_vertices;
+                    parents[u + n_vertices] = new_parent;
+                    if (parents[u + n_vertices] <= n_vertices-1 || parents[u + n_vertices] >= n_edges + n_vertices )
                     {
                         parents[u + n_vertices] = u + n_vertices;
                     } //special case last iteration, if one component the parent of the node is itself because we are dealing with the last chain of node from root to a border edge
@@ -282,7 +282,10 @@ namespace hg {
             for (auto u = 0; u < n_edges; u++)
             {
                 index_t node = u+n_vertices;
-                while (graph_struct.getWeight(u) > graph_struct.getWeight(parents[node] - n_vertices)) node = parents[node];
+                while (graph_struct.getWeight(u) > graph_struct.getWeight(parents[node] - n_vertices) && node != parents[node]) //if node == parents[node] root
+                {
+                    node = parents[node];
+                }
                 parents[u+n_vertices] = parents[node];
                 B[u] = B[node-n_vertices];
             }
@@ -316,7 +319,7 @@ namespace hg {
                 }
             });
 
-            for (index_t i = 0; i < n_edges-2; ++i)
+            for (index_t i = 0; i < n_edges-1; ++i)
             {
                 auto u = indexedValues[i].index;
                 auto up = indexedValues[i+1].index;
@@ -326,6 +329,22 @@ namespace hg {
                     parents[u+n_vertices] = up+n_vertices;
                 }
             }
+
+            auto max_w = 0;
+            auto index = n_vertices+n_edges+2;//index max
+
+            for (index_t i = 0; i < n_edges; ++i)
+            {
+                if (max_w <= graph_struct.getWeight(i) && mst[i] == in_mst)
+                {
+                //if (index > i + n_vertices){
+                    max_w = graph_struct.getWeight(i);
+                    index = i+ n_vertices;
+                //}
+                }
+            }
+
+            parents[index] = index;//special case for the root, sometimes it need to be enforce
         };
 
         template <typename E1, typename E2, typename T>
@@ -380,8 +399,9 @@ namespace hg {
 
             while (moreTOneCC == true)
             {
+                std::cout << "Interation #" << n_it << std::endl;
                 InnerBorderDectection(graph_struct, C, mst, vertex_altitudes, saddles);
-
+                //for (auto u = 0; u < num_edges; u++) std::cout << u << " mst : " << mst[u] << std::endl;
                 ConnectedComponentsLabeling(graph_struct, C, mst, vertex_altitudes, saddles, uf, B);
                 auto prev = uf.find(0);
                 moreTOneCC = false;
@@ -399,29 +419,40 @@ namespace hg {
                 //std::cout << "Update Parents" << std::endl;
 
                 UpdateParents(graph_struct, C, mst, vertex_altitudes, saddles, uf, B, parents, n_it);
+                /*for (auto u = 0; u < num_vertices + num_edges; u++)
+                {
+                    if (u < num_vertices)
+                    {
+                        std::cout << "Vertex " << char(u+'a') << " parent : " << parents[u]-9 << std::endl;
+                    }
+                    else
+                    {
+                        std::cout << "Edge " << u-9 << " : " << parents[u]-9 << std::endl;
 
-                //for (auto u = 0; u < num_vertices; u++) std::cout << u << " B : " << B[u] << std::endl;
-
+                    }
+                }for (auto u = 0; u < num_edges; u++) std::cout << u << " B : " << B[u] << std::endl;
+*/
                 n_it++;
             }
 
             MoveUp(graph_struct, C, mst, vertex_altitudes, saddles,uf,B,parents,n_it);
 
 
-            BinarizeTree(graph_struct,C,mst,vertex_altitudes,saddles,uf,B,parents,n_it);
+            //std::cout << "Binarize tree" << std::endl;
 
+            BinarizeTree(graph_struct,C,mst,vertex_altitudes,saddles,uf,B,parents,n_it);
             /*for (auto u = 0; u < num_vertices + num_edges; u++)
             {
                 if (u < num_vertices)
                 {
-                    std::cout << "Vertex " << u << " parent : " << parents[u] << std::endl;
+                    std::cout << "Vertex " << char(u+'a') << " parent : " << parents[u]-9 << std::endl;
                 }
                 else
                 {
-                    std::cout << "Edge " << u << " : " << parents[u] << std::endl;
-                }
-            }*/
+                    std::cout << "Edge " << u-9 << " : " << parents[u]-9 << std::endl;
 
+                }
+            }for (auto u = 0; u < num_edges; u++) std::cout << u << " B : " << B[u] << std::endl;*/
             //hg_assert(num_edge_found == num_edge_mst, "Input graph must be connected.");
             array_1d<index_t> mst_edge_map = xt::empty<index_t>({num_edge_mst});
             return std::make_pair(
