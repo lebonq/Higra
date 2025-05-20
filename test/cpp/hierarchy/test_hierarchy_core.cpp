@@ -154,7 +154,6 @@ for (auto seed = 0; seed < 10; seed++)
     std::cout << "Seed : " << seed << std::endl;
     xt::random::seed(seed);
 
-    std::cout << num_edges(graph) << std::endl;
     //auto edge_weights = xt::concatenate(xtuple(edge_weights1,edge_weights2),0);
 
     xt::random::shuffle(edge_weights);
@@ -190,17 +189,7 @@ for (auto seed = 0; seed < 10; seed++)
     {
         //std::cout << mst_edge_map1[u-num_vertices(graph)] << " : " << mst_edge_map1[hg::parents(tree)[u]-num_vertices(graph)] << std::endl;
         auto par_k = mst_edge_map1[hg::parents(tree)[u] - num_vertices(graph)];
-        index_t par_b = parents[mst_edge_map1[u - num_vertices(graph)] + num_vertices(graph)] - num_vertices(graph);
-
-        if (par_b != par_k)
-        {
-            // std::cout << "bpar[" << u - 1 << "] : " << parents[mst_edge_map1[u - 1 - num_vertices(graph)] + num_vertices(graph)] - num_vertices(graph) << std::endl;
-            // std::cout << "bpar[" << u << "] : " << parents[mst_edge_map1[u - num_vertices(graph)] +                num_vertices(graph)] - num_vertices(graph) << std::endl;
-            //std::cout << "kpar[" << u - 1 << "] : " << mst_edge_map1[hg::parents(tree)[u - 1] - num_vertices(graph)] << std::endl;
-            // std::cout << "kpar[" << u << "] : " << mst_edge_map1[hg::parents(tree)[u] - num_vertices(graph)] <<std::endl;
-            // std::cout << par_b << " = " << par_k << std::endl;
-            // std::cout << u << "/" << num_vertices(graph) * 2 - 2 << std::endl;
-        }
+        auto par_b = parents[mst_edge_map1[u - num_vertices(graph)] + num_vertices(graph)] - num_vertices(graph);
         assert(par_b == par_k);
     }
     for (auto u = 0; u < num_edges(graph); u++)

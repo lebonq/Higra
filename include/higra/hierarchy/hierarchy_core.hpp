@@ -344,7 +344,7 @@ namespace hg {
                 }
             }
 
-            parents[index] = index;//special case for the root, sometimes it need to be enforce
+            parents[index] = index;//special case for the root
         };
 
         template <typename E1, typename E2, typename T>
