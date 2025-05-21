@@ -65,8 +65,8 @@ namespace hierarchy_core {
         REQUIRE((mst_edge_map == array_1d<int>({1, 0, 3, 4, 2})));
     }
 
-    TEST_CASE("boruvka binary partition tree trivial", "[hierarchy_core]") {
-
+    TEST_CASE("boruvka binary partition tree trivial", "[hierarchy_core]")
+    {
         auto graph = get_4_adjacency_graph({1, 2});
 
         array_1d<double> edge_weights{2};
@@ -80,7 +80,8 @@ namespace hierarchy_core {
         REQUIRE((mst_edge_map == array_1d<index_t>({in_mst})));
     }
 
-    TEST_CASE("boruvka binary partition tree", "[hierarchy_core]") {
+    TEST_CASE("boruvka binary partition tree", "[hierarchy_core]")
+    {
         auto graph = get_4_adjacency_graph({2, 3});
 
         array_1d<double> edge_weights{1, 0, 2, 1, 1, 1, 2};
@@ -90,19 +91,19 @@ namespace hierarchy_core {
         auto mst_edge_map = res.second;
 
         auto res1 = bpt_canonical(graph, edge_weights);
-        auto &tree = res1.tree;
-        auto &mst_edge_map1 = res1.mst_edge_map;
+        auto& tree = res1.tree;
+        auto& mst_edge_map1 = res1.mst_edge_map;
 
-        for (auto x = 0; x < num_vertices(graph); x++)
+        for (size_t x = 0; x < num_vertices(graph); x++)
         {
-            assert(mst_edge_map1[hg::parents(tree)[x]-num_vertices(graph)] == parents[x]-num_vertices(graph) );
+            REQUIRE(mst_edge_map1[hg::parents(tree)[x]-num_vertices(graph)] == parents[x]-num_vertices(graph));
         }
-        for (auto u = num_vertices(graph); u < num_vertices(graph)*2-1; u++)
+        for (long unsigned int u = num_vertices(graph); u < num_vertices(graph) * 2 - 1; u++)
         {
-            auto par_k = mst_edge_map1[hg::parents(tree)[u]-num_vertices(graph)]+num_vertices(graph);
-            auto par_b = parents[mst_edge_map1[u-num_vertices(graph)]+num_vertices(graph)];
+            auto par_k = mst_edge_map1[hg::parents(tree)[u] - num_vertices(graph)] + num_vertices(graph);
+            auto par_b = parents[mst_edge_map1[u - num_vertices(graph)] + num_vertices(graph)];
 
-            assert(par_b == par_k);
+            REQUIRE(par_b == par_k);
         }
 
         REQUIRE(parents.size() == num_vertices(graph)+num_edges(graph));
@@ -111,92 +112,94 @@ namespace hierarchy_core {
         REQUIRE((mst_edge_map == array_1d<index_t>({in_mst,in_mst,in_mst,in_mst,in_mst,out_mst,undef_mst})));
     }
 
-    TEST_CASE("boruvka binary partition tree paper exemple", "[hierarchy_core]") {
+    TEST_CASE("boruvka binary partition tree paper exemple", "[hierarchy_core]")
+    {
         auto graph = get_4_adjacency_graph({3, 4});
 
-        array_1d<double> edge_weights{6,10,18,1,4,13,14,16,12,15,9,2,7,8,3,17,11};
+        array_1d<double> edge_weights{6, 10, 18, 1, 4, 13, 14, 16, 12, 15, 9, 2, 7, 8, 3, 17, 11};
 
         auto res = bpt_boruvka(graph, edge_weights);
         auto parents = res.first;
         auto mst_edge_map = res.second;
 
         auto res1 = bpt_canonical(graph, edge_weights);
-        auto &tree = res1.tree;
-        auto &mst_edge_map1 = res1.mst_edge_map;
+        auto& tree = res1.tree;
+        auto& mst_edge_map1 = res1.mst_edge_map;
 
-        for (auto x = 0; x < num_vertices(graph); x++)
+        for (long unsigned int x = 0; x < num_vertices(graph); x++)
         {
-            assert(mst_edge_map1[hg::parents(tree)[x]-num_vertices(graph)] == parents[x]-num_vertices(graph) );
+            REQUIRE(mst_edge_map1[hg::parents(tree)[x]-num_vertices(graph)] == parents[x]-num_vertices(graph));
         }
-        for (auto u = num_vertices(graph); u < num_vertices(graph)*2-1; u++)
+        for (long unsigned int u = num_vertices(graph); u < num_vertices(graph) * 2 - 1; u++)
         {
-            auto par_k = mst_edge_map1[hg::parents(tree)[u]-num_vertices(graph)]+num_vertices(graph);
-            auto par_b = parents[mst_edge_map1[u-num_vertices(graph)]+num_vertices(graph)];
+            auto par_k = mst_edge_map1[hg::parents(tree)[u] - num_vertices(graph)] + num_vertices(graph);
+            auto par_b = parents[mst_edge_map1[u - num_vertices(graph)] + num_vertices(graph)];
 
-            assert(par_b == par_k);
+            REQUIRE(par_b == par_k);
         }
 
         REQUIRE(parents.size() == num_vertices(graph)+num_edges(graph));
-        REQUIRE(xt::allclose(parents, xt::xarray<unsigned int>({12,15,16,16,13,15,23,23,26,26,24,25,22,21,14,12,17,21,18,19,20,21,13,24,25,17,22,27,28})));
+        REQUIRE(
+            xt::allclose(parents, xt::xarray<unsigned int>({12,15,16,16,13,15,23,23,26,26,24,25,22,21,14,12,17,21,18,19,
+                20,21,13,24,25,17,22,27,28})));
         // REQUIRE(xt::allclose(altitudes, xt::xarray<double>({0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 2})));
-        REQUIRE((mst_edge_map == array_1d<index_t>({in_mst,in_mst,undef_mst,in_mst,in_mst,in_mst,out_mst,out_mst,out_mst,in_mst,in_mst,in_mst,in_mst,in_mst,in_mst,undef_mst,out_mst})));
+        REQUIRE(
+            (mst_edge_map == array_1d<index_t>({in_mst,in_mst,undef_mst,in_mst,in_mst,in_mst,out_mst,out_mst,out_mst,
+                in_mst,in_mst,in_mst,in_mst,in_mst,in_mst,undef_mst,out_mst})));
     }
 
     TEST_CASE("boruvka binary partition random graphs", "[hierarchy_core]")
     {
-        auto graph = get_4_adjacency_graph({1000,1000});
+        auto graph = get_4_adjacency_graph({1000, 1000});
 
 
-    array_1d<double> edge_weights = xt::arange<double>(num_edges(graph));
-    //random mix edge_weights
-for (auto seed = 0; seed < 10; seed++)
-{
-    std::cout << "Seed : " << seed << std::endl;
-    xt::random::seed(seed);
+        array_1d<double> edge_weights = xt::arange<double>(num_edges(graph));
+        //random mix edge_weights
+        for (auto seed = 0; seed < 10; seed++)
+        {
+            std::cout << "Seed : " << seed << std::endl;
+            xt::random::seed(seed);
 
-    //auto edge_weights = xt::concatenate(xtuple(edge_weights1,edge_weights2),0);
+            //auto edge_weights = xt::concatenate(xtuple(edge_weights1,edge_weights2),0);
 
-    xt::random::shuffle(edge_weights);
+            xt::random::shuffle(edge_weights);
 
-    //std::cout << edge_weights << std::endl;
+            //std::cout << edge_weights << std::endl;
 
-    auto time_s = std::chrono::high_resolution_clock::now();
-    auto res = bpt_boruvka(graph, edge_weights);
-    auto time_e = std::chrono::high_resolution_clock::now();
-    auto diff_time = std::chrono::duration_cast<std::chrono::milliseconds>(time_e - time_s);
-    std::cout << "Time for Boruvka : " << diff_time.count() << std::endl;
+            auto time_s = std::chrono::high_resolution_clock::now();
+            auto res = bpt_boruvka(graph, edge_weights);
+            auto time_e = std::chrono::high_resolution_clock::now();
+            auto diff_time = std::chrono::duration_cast<std::chrono::milliseconds>(time_e - time_s);
+            std::cout << "Time for Boruvka : " << diff_time.count() << std::endl;
 
-    auto parents = res.first;
-    auto mst_edge_map = res.second;
+            auto parents = res.first;
+            auto mst_edge_map = res.second;
 
-    time_s = std::chrono::high_resolution_clock::now();
-    auto res1 = bpt_canonical(graph, edge_weights);
-    time_e = std::chrono::high_resolution_clock::now();
-    diff_time = std::chrono::duration_cast<std::chrono::milliseconds>(time_e - time_s);
-    std::cout << "Time for Kruskal : " << diff_time.count() << std::endl;
+            time_s = std::chrono::high_resolution_clock::now();
+            auto res1 = bpt_canonical(graph, edge_weights);
+            time_e = std::chrono::high_resolution_clock::now();
+            diff_time = std::chrono::duration_cast<std::chrono::milliseconds>(time_e - time_s);
+            std::cout << "Time for Kruskal : " << diff_time.count() << std::endl;
 
-    auto& tree = res1.tree;
-    auto& mst_edge_map1 = res1.mst_edge_map;
+            auto& tree = res1.tree;
+            auto& mst_edge_map1 = res1.mst_edge_map;
 
-    for (auto x = 0; x < num_vertices(graph); x++)
-    {
-        //std::cout << "K" << char(x+'a') << " : " << mst_edge_map1[hg::parents(tree)[x]-num_vertices(graph)] << std::endl;
-        //std::cout << "B" << char(x+'a') << " : " << parents[x]-num_vertices(graph) << std::endl;
-        assert(mst_edge_map1[hg::parents(tree)[x]-num_vertices(graph)] == parents[x]-num_vertices(graph));
-    }
-    auto parents_vect_b = parents.data();
-    for (auto u = num_vertices(graph); u < num_vertices(graph) * 2 - 1; u++)
-    {
-        //std::cout << mst_edge_map1[u-num_vertices(graph)] << " : " << mst_edge_map1[hg::parents(tree)[u]-num_vertices(graph)] << std::endl;
-        auto par_k = mst_edge_map1[hg::parents(tree)[u] - num_vertices(graph)];
-        auto par_b = parents[mst_edge_map1[u - num_vertices(graph)] + num_vertices(graph)] - num_vertices(graph);
-        assert(par_b == par_k);
-    }
-    for (auto u = 0; u < num_edges(graph); u++)
-    {
-        //std::cout << "Bedges " << u << " : " << parents[u+num_vertices(graph)]-num_vertices(graph) << std::endl;
-    }
-}
+            for (long unsigned int x = 0; x < num_vertices(graph); x++)
+            {
+                //std::cout << "K" << char(x+'a') << " : " << mst_edge_map1[hg::parents(tree)[x]-num_vertices(graph)] << std::endl;
+                //std::cout << "B" << char(x+'a') << " : " << parents[x]-num_vertices(graph) << std::endl;
+                REQUIRE(mst_edge_map1[hg::parents(tree)[x]-num_vertices(graph)] == parents[x]-num_vertices(graph));
+            }
+
+            for (long unsigned int u = num_vertices(graph); u < num_vertices(graph) * 2 - 1; u++)
+            {
+                //std::cout << mst_edge_map1[u-num_vertices(graph)] << " : " << mst_edge_map1[hg::parents(tree)[u]-num_vertices(graph)] << std::endl;
+                auto par_k = mst_edge_map1[hg::parents(tree)[u] - num_vertices(graph)];
+                auto par_b = parents[mst_edge_map1[u - num_vertices(graph)] + num_vertices(graph)] -
+                    num_vertices(graph);
+                REQUIRE(par_b == par_k);
+            }
+        }
     }
 
     TEST_CASE("simplify tree", "[hierarchy_core]") {

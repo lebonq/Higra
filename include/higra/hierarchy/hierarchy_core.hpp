@@ -401,7 +401,7 @@ namespace hg {
             {
                 std::cout << "Interation #" << n_it << std::endl;
                 InnerBorderDectection(graph_struct, C, mst, vertex_altitudes, saddles);
-                //for (auto u = 0; u < num_edges; u++) std::cout << u << " mst : " << mst[u] << std::endl;
+
                 ConnectedComponentsLabeling(graph_struct, C, mst, vertex_altitudes, saddles, uf, B);
                 auto prev = uf.find(0);
                 moreTOneCC = false;
@@ -415,23 +415,8 @@ namespace hg {
                 }
 
                 bassin_altitude(graph_struct, C, mst, vertex_altitudes, saddles);
-
-                //std::cout << "Update Parents" << std::endl;
-
                 UpdateParents(graph_struct, C, mst, vertex_altitudes, saddles, uf, B, parents, n_it);
-                /*for (auto u = 0; u < num_vertices + num_edges; u++)
-                {
-                    if (u < num_vertices)
-                    {
-                        std::cout << "Vertex " << char(u+'a') << " parent : " << parents[u]-9 << std::endl;
-                    }
-                    else
-                    {
-                        std::cout << "Edge " << u-9 << " : " << parents[u]-9 << std::endl;
 
-                    }
-                }for (auto u = 0; u < num_edges; u++) std::cout << u << " B : " << B[u] << std::endl;
-*/
                 n_it++;
             }
 
@@ -453,7 +438,9 @@ namespace hg {
 
                 }
             }for (auto u = 0; u < num_edges; u++) std::cout << u << " B : " << B[u] << std::endl;*/
+
             //hg_assert(num_edge_found == num_edge_mst, "Input graph must be connected.");
+
             array_1d<index_t> mst_edge_map = xt::empty<index_t>({num_edge_mst});
             return std::make_pair(
                 parents,
