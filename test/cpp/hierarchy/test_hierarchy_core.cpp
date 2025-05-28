@@ -150,13 +150,17 @@ namespace hierarchy_core {
 
     TEST_CASE("boruvka binary partition random graphs", "[hierarchy_core]")
     {
-        auto graph = get_4_adjacency_graph({1000, 1000});
+        auto graph = get_4_adjacency_graph({10000, 1000});
 
+        auto mean_b = 0;
+        auto mean_k = 0;
+        auto nb_bench = 10;
 
         array_1d<double> edge_weights = xt::arange<double>(num_edges(graph));
         //random mix edge_weights
-        for (auto seed = 0; seed < 10; seed++)
+        for (auto bench = 0; bench < nb_bench; bench++)
         {
+            auto seed= 1500;
             std::cout << "Seed : " << seed << std::endl;
             xt::random::seed(seed);
 
@@ -171,6 +175,7 @@ namespace hierarchy_core {
             auto time_e = std::chrono::high_resolution_clock::now();
             auto diff_time = std::chrono::duration_cast<std::chrono::milliseconds>(time_e - time_s);
             std::cout << "Time for Boruvka : " << diff_time.count() << std::endl;
+            mean_b += diff_time.count();
 
             auto parents = res.first;
             auto mst_edge_map = res.second;
@@ -180,6 +185,7 @@ namespace hierarchy_core {
             time_e = std::chrono::high_resolution_clock::now();
             diff_time = std::chrono::duration_cast<std::chrono::milliseconds>(time_e - time_s);
             std::cout << "Time for Kruskal : " << diff_time.count() << std::endl;
+            mean_k += diff_time.count();
 
             auto& tree = res1.tree;
             auto& mst_edge_map1 = res1.mst_edge_map;
@@ -199,7 +205,12 @@ namespace hierarchy_core {
                     num_vertices(graph);
                 REQUIRE(par_b == par_k);
             }
+
+
         }
+        std::cout << "Mean time for Boruvka : " << mean_b/nb_bench << std::endl;
+        std::cout << "Mean time for Kruskal : " << mean_k/nb_bench << std::endl;
+
     }
 
     TEST_CASE("simplify tree", "[hierarchy_core]") {
