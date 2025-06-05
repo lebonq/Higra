@@ -14,6 +14,7 @@
 #include "../test_utils.hpp"
 #include "xtensor/xindex_view.hpp"
 #include "xtensor/xrandom.hpp"
+#include <opencv2/opencv.hpp>
 
 namespace hierarchy_core {
 
@@ -150,7 +151,7 @@ namespace hierarchy_core {
 
     TEST_CASE("boruvka binary partition random graphs", "[hierarchy_core]")
     {
-        auto graph = get_4_adjacency_graph({10000, 1000});
+        auto graph = get_4_adjacency_graph({1000, 2000});
 
         auto mean_b = 0;
         auto mean_k = 0;
@@ -158,15 +159,15 @@ namespace hierarchy_core {
 
         array_1d<double> edge_weights = xt::arange<double>(num_edges(graph));
         //random mix edge_weights
+
+        auto seed= 1500;
+        std::cout << "Seed : " << seed << std::endl;
+        xt::random::seed(seed);
+        xt::random::shuffle(edge_weights);
+
         for (auto bench = 0; bench < nb_bench; bench++)
         {
-            auto seed= 1500;
-            std::cout << "Seed : " << seed << std::endl;
-            xt::random::seed(seed);
-
             //auto edge_weights = xt::concatenate(xtuple(edge_weights1,edge_weights2),0);
-
-            xt::random::shuffle(edge_weights);
 
             //std::cout << edge_weights << std::endl;
 
@@ -211,6 +212,342 @@ namespace hierarchy_core {
         std::cout << "Mean time for Boruvka : " << mean_b/nb_bench << std::endl;
         std::cout << "Mean time for Kruskal : " << mean_k/nb_bench << std::endl;
 
+    }
+
+        TEST_CASE("boruvka binary partition image ", "[hierarchy_core]")
+    {
+
+            auto filepath = "/home/lebonqu/CLionProjects/Higra/images/resized_100%.jpg";
+            // Read the JPEG image
+            cv::Mat image = cv::imread(filepath, cv::IMREAD_COLOR);
+            REQUIRE_FALSE(image.empty());
+
+            // Convert the image to grayscale
+            cv::Mat grayscaleImage;
+            cv::cvtColor(image, grayscaleImage, cv::COLOR_BGR2GRAY);
+
+            // Get the dimensions of the grayscale image
+            int width = grayscaleImage.cols;
+            int height = grayscaleImage.rows;
+
+            std::cout << "Image Size : " << width * height << "pixels" << std::endl;
+
+            // Create a 1D array to hold the grayscale pixel values
+            auto graph = get_4_adjacency_graph({height, width});
+            array_1d<double> edge_weights({num_edges(graph)},-1.0);
+
+            auto it = 0;
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    auto current =  static_cast<double>(grayscaleImage.at<uchar>(y, x));
+
+                    // Calculate the difference with the right pixel
+                    if (x + 1 < width) {
+                        auto right =  static_cast<double>(grayscaleImage.at<uchar>(y, x + 1));
+                        edge_weights[it] = std::abs(right - current);
+                        it++;
+                    }
+
+                    // Calculate the difference with the bottom pixel
+                    if (y + 1 < height) {
+                        auto bottom =  static_cast<double>(grayscaleImage.at<uchar>(y + 1, x));
+                        edge_weights[it] = std::abs(bottom - current);
+                        it++;
+                    }
+                }
+            }
+
+            for (size_t i = 0; i < edge_weights.size(); ++i) {
+                edge_weights[i] += i * 1e-10; // Add a small increment based on the index
+            }
+
+            auto mean_b = 0;
+            auto mean_k = 0;
+            auto nb_bench = 1;
+
+            for (auto bench = 0; bench < nb_bench; bench++)
+            {
+                std::cout << "Benchmark #" << bench << std::endl;
+                auto time_s = std::chrono::high_resolution_clock::now();
+                auto res = bpt_boruvka(graph, edge_weights);
+                auto time_e = std::chrono::high_resolution_clock::now();
+                auto diff_time = std::chrono::duration_cast<std::chrono::milliseconds>(time_e - time_s);
+                //std::cout << "Time for Boruvka : " << diff_time.count() << std::endl;
+                mean_b += diff_time.count();
+
+                auto parents = res.first;
+                auto mst_edge_map = res.second;
+
+                time_s = std::chrono::high_resolution_clock::now();
+                auto res1 = bpt_canonical(graph, edge_weights);
+                time_e = std::chrono::high_resolution_clock::now();
+                diff_time = std::chrono::duration_cast<std::chrono::milliseconds>(time_e - time_s);
+                //std::cout << "Time for Kruskal : " << diff_time.count() << std::endl;
+                mean_k += diff_time.count();
+
+                auto& tree = res1.tree;
+                auto& mst_edge_map1 = res1.mst_edge_map;
+
+                for (long unsigned int x = 0; x < num_vertices(graph); x++)
+                {
+                    //std::cout << "K" << char(x+'a') << " : " << mst_edge_map1[hg::parents(tree)[x]-num_vertices(graph)] << std::endl;
+                    //std::cout << "B" << char(x+'a') << " : " << parents[x]-num_vertices(graph) << std::endl;
+                    REQUIRE(mst_edge_map1[hg::parents(tree)[x]-num_vertices(graph)] == parents[x]-num_vertices(graph));
+                }
+
+                for (long unsigned int u = num_vertices(graph); u < num_vertices(graph) * 2 - 1; u++)
+                {
+                    //std::cout << mst_edge_map1[u-num_vertices(graph)] << " : " << mst_edge_map1[hg::parents(tree)[u]-num_vertices(graph)] << std::endl;
+                    auto par_k = mst_edge_map1[hg::parents(tree)[u] - num_vertices(graph)];
+                    auto par_b = parents[mst_edge_map1[u - num_vertices(graph)] + num_vertices(graph)] -
+                        num_vertices(graph);
+                    REQUIRE(par_b == par_k);
+                }
+
+
+            }
+            std::cout << "Mean time for Boruvka : " << mean_b/nb_bench << std::endl;
+            std::cout << "Mean time for Kruskal : " << mean_k/nb_bench << std::endl;
+
+    }
+
+
+    TEST_CASE("boruvka binary partition images", "[hierarchy_core]")
+    {
+
+        std::string basePath = "/home/lebonqu/CLionProjects/Higra/images/";
+        std::string baseFileName = "resized_";
+        std::string extension = ".jpg";
+
+        // Define the fractions
+        std::vector<std::string> fractions = {
+            "1%", "2%", "5%", "10%", "15%", "25%", "50%", "75%", "100%",
+            "125%", "150%", "175%", "200%", "225%", "250%",
+            "275%", "300%", "325%", "350%", "375%", "400%"
+        };
+
+
+        // Create a vector to store the file paths*/
+        std::vector<std::string> imagePaths;
+
+        // Generate the file paths
+        for (const auto& fraction : fractions) {
+            std::string filePath = basePath + baseFileName + fraction + extension;
+            imagePaths.push_back(filePath);
+        }
+
+        for (auto filepath : imagePaths)
+        {
+            // Read the JPEG image
+            cv::Mat image = cv::imread(filepath, cv::IMREAD_COLOR);
+            REQUIRE_FALSE(image.empty());
+
+            // Convert the image to grayscale
+            cv::Mat grayscaleImage;
+            cv::cvtColor(image, grayscaleImage, cv::COLOR_BGR2GRAY);
+
+            // Get the dimensions of the grayscale image
+            int width = grayscaleImage.cols;
+            int height = grayscaleImage.rows;
+
+            std::cout << "Image Size : " << width * height << "pixels" << std::endl;
+
+            // Create a 1D array to hold the grayscale pixel values
+            auto graph = get_4_adjacency_graph({height, width});
+            array_1d<double> edge_weights({num_edges(graph)},-1.0);
+
+            auto it = 0;
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    auto current =  static_cast<double>(grayscaleImage.at<uchar>(y, x));
+
+                    // Calculate the difference with the right pixel
+                    if (x + 1 < width) {
+                        auto right =  static_cast<double>(grayscaleImage.at<uchar>(y, x + 1));
+                        edge_weights[it] = std::abs(right - current);
+                        it++;
+                    }
+
+                    // Calculate the difference with the bottom pixel
+                    if (y + 1 < height) {
+                        auto bottom =  static_cast<double>(grayscaleImage.at<uchar>(y + 1, x));
+                        edge_weights[it] = std::abs(bottom - current);
+                        it++;
+                    }
+                }
+            }
+
+            for (size_t i = 0; i < edge_weights.size(); ++i) {
+                edge_weights[i] += i * 1e-10; // Add a small increment based on the index
+            }
+
+            auto mean_b = 0;
+            auto mean_k = 0;
+            auto nb_bench = 1;
+
+            for (auto bench = 0; bench < nb_bench; bench++)
+            {
+                std::cout << "Benchmark #" << bench << std::endl;
+                auto time_s = std::chrono::high_resolution_clock::now();
+                auto res = bpt_boruvka(graph, edge_weights);
+                auto time_e = std::chrono::high_resolution_clock::now();
+                auto diff_time = std::chrono::duration_cast<std::chrono::milliseconds>(time_e - time_s);
+                //std::cout << "Time for Boruvka : " << diff_time.count() << std::endl;
+                mean_b += diff_time.count();
+
+                auto parents = res.first;
+                auto mst_edge_map = res.second;
+
+                time_s = std::chrono::high_resolution_clock::now();
+                auto res1 = bpt_canonical(graph, edge_weights);
+                time_e = std::chrono::high_resolution_clock::now();
+                diff_time = std::chrono::duration_cast<std::chrono::milliseconds>(time_e - time_s);
+                //std::cout << "Time for Kruskal : " << diff_time.count() << std::endl;
+                mean_k += diff_time.count();
+
+                auto& tree = res1.tree;
+                auto& mst_edge_map1 = res1.mst_edge_map;
+
+                for (long unsigned int x = 0; x < num_vertices(graph); x++)
+                {
+                    //std::cout << "K" << char(x+'a') << " : " << mst_edge_map1[hg::parents(tree)[x]-num_vertices(graph)] << std::endl;
+                    //std::cout << "B" << char(x+'a') << " : " << parents[x]-num_vertices(graph) << std::endl;
+                    REQUIRE(mst_edge_map1[hg::parents(tree)[x]-num_vertices(graph)] == parents[x]-num_vertices(graph));
+                }
+
+                for (long unsigned int u = num_vertices(graph); u < num_vertices(graph) * 2 - 1; u++)
+                {
+                    //std::cout << mst_edge_map1[u-num_vertices(graph)] << " : " << mst_edge_map1[hg::parents(tree)[u]-num_vertices(graph)] << std::endl;
+                    auto par_k = mst_edge_map1[hg::parents(tree)[u] - num_vertices(graph)];
+                    auto par_b = parents[mst_edge_map1[u - num_vertices(graph)] + num_vertices(graph)] -
+                        num_vertices(graph);
+                    REQUIRE(par_b == par_k);
+                }
+
+
+            }
+            std::cout << "Mean time for Boruvka : " << mean_b/nb_bench << std::endl;
+            std::cout << "Mean time for Kruskal : " << mean_k/nb_bench << std::endl;
+        }
+    }
+
+     TEST_CASE("boruvka binary partition deep gradient", "[hierarchy_core]")
+    {
+
+        std::string basePath = "/home/lebonqu/CLionProjects/Higra/images/";
+        std::string baseFileName = "grad_";
+        std::string extension = ".jpg";
+
+        // Define the fractions
+        std::vector<std::string> fractions = {
+             "10%", "15%", "25%", "50%", "75%", "100%",
+            "125%", "150%", "175%", "200%", "225%", "250%",
+            "275%", "300%", "325%", "350%"
+        };
+
+
+        // Create a vector to store the file paths*/
+        std::vector<std::string> imagePaths;
+
+        // Generate the file paths
+        for (const auto& fraction : fractions) {
+            std::string filePath = basePath + baseFileName + fraction + extension;
+            imagePaths.push_back(filePath);
+        }
+
+        for (auto filepath : imagePaths)
+        {
+            // Read the JPEG image
+            cv::Mat image = cv::imread(filepath, cv::IMREAD_COLOR);
+            REQUIRE_FALSE(image.empty());
+
+            // Convert the image to grayscale
+            cv::Mat grayscaleImage;
+            cv::cvtColor(image, grayscaleImage, cv::COLOR_BGR2GRAY);
+
+            // Get the dimensions of the grayscale image
+            int width = grayscaleImage.cols;
+            int height = grayscaleImage.rows;
+
+            std::cout << "Image Size : " << width * height << "pixels" << std::endl;
+
+            // Create a 1D array to hold the grayscale pixel values
+            auto graph = get_4_adjacency_graph({height, width});
+            array_1d<double> edge_weights({num_edges(graph)},-1.0);
+
+            auto it = 0;
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    auto current =  static_cast<double>(grayscaleImage.at<uchar>(y, x));
+
+                    // Calculate the difference with the right pixel
+                    if (x + 1 < width) {
+                        auto right =  static_cast<double>(grayscaleImage.at<uchar>(y, x + 1));
+                        edge_weights[it] = std::round((right + current)/2);
+                        it++;
+                    }
+
+                    // Calculate the difference with the bottom pixel
+                    if (y + 1 < height) {
+                        auto bottom =  static_cast<double>(grayscaleImage.at<uchar>(y + 1, x));
+                        edge_weights[it] = std::round((bottom + current)/2);
+                        it++;
+                    }
+                }
+            }
+
+            for (size_t i = 0; i < edge_weights.size(); ++i) {
+                edge_weights[i] += i * 1e-10; // Add a small increment based on the index
+            }
+
+            auto mean_b = 0;
+            auto mean_k = 0;
+            auto nb_bench = 1;
+
+            for (auto bench = 0; bench < nb_bench; bench++)
+            {
+                std::cout << "Benchmark #" << bench << std::endl;
+                auto time_s = std::chrono::high_resolution_clock::now();
+                auto res = bpt_boruvka(graph, edge_weights);
+                auto time_e = std::chrono::high_resolution_clock::now();
+                auto diff_time = std::chrono::duration_cast<std::chrono::milliseconds>(time_e - time_s);
+                //std::cout << "Time for Boruvka : " << diff_time.count() << std::endl;
+                mean_b += diff_time.count();
+
+                auto parents = res.first;
+                auto mst_edge_map = res.second;
+
+                time_s = std::chrono::high_resolution_clock::now();
+                auto res1 = bpt_canonical(graph, edge_weights);
+                time_e = std::chrono::high_resolution_clock::now();
+                diff_time = std::chrono::duration_cast<std::chrono::milliseconds>(time_e - time_s);
+                //std::cout << "Time for Kruskal : " << diff_time.count() << std::endl;
+                mean_k += diff_time.count();
+
+                auto& tree = res1.tree;
+                auto& mst_edge_map1 = res1.mst_edge_map;
+
+                for (long unsigned int x = 0; x < num_vertices(graph); x++)
+                {
+                    //std::cout << "K" << char(x+'a') << " : " << mst_edge_map1[hg::parents(tree)[x]-num_vertices(graph)] << std::endl;
+                    //std::cout << "B" << char(x+'a') << " : " << parents[x]-num_vertices(graph) << std::endl;
+                    REQUIRE(mst_edge_map1[hg::parents(tree)[x]-num_vertices(graph)] == parents[x]-num_vertices(graph));
+                }
+
+                for (long unsigned int u = num_vertices(graph); u < num_vertices(graph) * 2 - 1; u++)
+                {
+                    //std::cout << mst_edge_map1[u-num_vertices(graph)] << " : " << mst_edge_map1[hg::parents(tree)[u]-num_vertices(graph)] << std::endl;
+                    auto par_k = mst_edge_map1[hg::parents(tree)[u] - num_vertices(graph)];
+                    auto par_b = parents[mst_edge_map1[u - num_vertices(graph)] + num_vertices(graph)] -
+                        num_vertices(graph);
+                    REQUIRE(par_b == par_k);
+                }
+
+
+            }
+            std::cout << "Mean time for Boruvka : " << mean_b/nb_bench << std::endl;
+            std::cout << "Mean time for Kruskal : " << mean_k/nb_bench << std::endl;
+        }
     }
 
     TEST_CASE("simplify tree", "[hierarchy_core]") {

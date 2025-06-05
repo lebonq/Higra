@@ -12,6 +12,8 @@
 if (DO_CPP_TEST)
     include_directories(${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/lib/include)
 
+    find_package(OpenCV REQUIRED)
+
     set(TEST_CPP_COMPONENTS ${TEST_CPP_COMPONENTS}
             test.cpp
             test_sorting.cpp
@@ -35,6 +37,9 @@ if (DO_CPP_TEST)
         target_include_directories(test_exe PRIVATE ${TBB_INCLUDE_DIRS})
         target_link_libraries(test_exe PRIVATE ${TBB_LIBRARIES})
     endif ()
+
+    target_include_directories(test_exe PRIVATE ${OpenCV_INCLUDE_DIRS})
+    target_link_libraries(test_exe PRIVATE ${OpenCV_LIBS})
 
     #target_link_libraries(test_exe Catch2::Catch2)
     add_test(NAME Test_cpp COMMAND test_exe)

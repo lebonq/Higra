@@ -36,6 +36,9 @@
     time_e = std::chrono::high_resolution_clock::now(); \
     std::cout << text << std::chrono::duration_cast<std::chrono::milliseconds>(time_e - time_b).count() << " ms" << std::endl;
 
+//#define TIME_MEASURE(text, func) \
+    func; \
+
 
 namespace hg {
 
@@ -151,19 +154,17 @@ namespace hg {
         };
 
         template <typename E1, typename E2, typename T>
-        void bassin_altitude(graph_boruvka<E1, E2, T>& graph_struct, array_1d<index_t>& C, array_1d<index_t>& mst,
-                             array_1d<double>& v_altitude, array_1d<index_t>& saddles)
+        void bassin_altitude(graph_boruvka<E1, E2, T>& graph_struct, array_1d<index_t>& C,
+                             array_1d<double>& v_altitude, array_1d<index_t>& saddles, std::vector<index_t>& mst_undef)
         {
-            index_t n_edges = graph_struct.num_edges;
-
-            for (auto u = 0; u < n_edges; u++)
+            for (auto u : mst_undef)
             {
                 auto x = graph_struct.getSource()(u);
                 auto y = graph_struct.getTarget()(u);
                 auto cx = C[x];
                 auto cy = C[y];
 
-                if (mst[u] == undef_mst && cx != cy)
+                if (cx != cy)
                 {
                     auto wu = graph_struct.getWeight(u);
 
@@ -185,13 +186,50 @@ namespace hg {
         };
 
         template <typename E1, typename E2, typename T>
-        void InnerBorderDectection(graph_boruvka<E1, E2, T>& graph_struct, array_1d<index_t>& C, array_1d<index_t>& mst,
+        std::vector<index_t> InnerBorderDectection(graph_boruvka<E1, E2, T>& graph_struct, array_1d<index_t>& C, array_1d<index_t>& mst,
         array_1d<double>& v_altitude, array_1d<index_t>& saddles, union_find& uf,
-               array_1d<index_t>& B,std::vector<index_t>& mst_in)
+               array_1d<index_t>& B,std::vector<index_t>& mst_in,std::vector<index_t>& mst_undef)
         {
-            index_t n_edges = graph_struct.num_edges;
 
-            for (auto u = 0; u < n_edges; u++)
+            std::vector<index_t> res;
+            //res.reserve(mst_undef.size()/2);
+
+            for (auto u : mst_undef) {
+                auto x = graph_struct.getSource()(u);
+                auto y = graph_struct.getTarget()(u);
+                auto cx = C[x];
+                auto cy = C[y];
+                auto wu = graph_struct.getWeight(u);
+
+
+                    if (cy == cx)
+                    {
+                        mst[u] = out_mst;
+                    }
+                    else                    if (wu < v_altitude[cx] || wu < v_altitude[cy] || // Determine if the edge is an inner or border edge
+                            (saddles[cy] == u && wu == v_altitude[cy]) ||
+                            (saddles[cx] == u && wu == v_altitude[cx]))
+                    {
+                        mst[u] = in_mst;
+
+                        mst_in.push_back(u);
+
+                        //CCLabeling
+                        auto xuf = uf.find(x);
+                        auto yuf = uf.find(y);
+                        uf.link(xuf,yuf);
+                    }
+                    else
+                    {
+                        res.push_back(u);
+                    }
+
+
+            }
+
+            return res;
+
+            /*for (auto u = 0; u < n_edges; u++)
             {
                 if (mst[u] == undef_mst)
                 {
@@ -224,7 +262,7 @@ namespace hg {
                         }
                     }
                 }
-            }
+            }*/
         };
 
         template <typename E1, typename E2, typename T>
@@ -385,7 +423,6 @@ namespace hg {
 
             auto moreTOneCC = true;
 
-            auto num_edge_mst = num_vertices - 1;
             //output Hierarchy $\mathcall(T)$, here vPar and ePar are the same array parents, to access element 0 of
             //ePar do parents[0+num_vertices]
             array_1d<index_t> parents = xt::arange<index_t>({num_vertices + num_edges});
@@ -410,9 +447,11 @@ namespace hg {
             index_t n_it = 0;
 
             std::cout << "Interation #" << n_it << std::endl;
-            std::cout << "First step to compute leaves parent" << std::endl;
+            //std::cout << "First step to compute leaves parent" << std::endl;
+            std::vector<index_t> mst_edges_undef(num_edges);
+            std::iota(mst_edges_undef.begin(), mst_edges_undef.end(), 0);
 
-            TIME_MEASURE("Bassin altitudes : ", bassin_altitude(graph_struct, C, mst, vertex_altitudes, saddles));
+            TIME_MEASURE("Bassin altitudes : ", bassin_altitude(graph_struct, C, vertex_altitudes, saddles,mst_edges_undef));
             //set the parents of the tree leaves
 
             for (auto x = 0; x < num_vertices; x++)
@@ -421,15 +460,12 @@ namespace hg {
             }
 
             std::vector<index_t> mst_edges_in;
-
-
-            int nb_comp;
-
+            mst_edges_in.reserve(num_edges/2);
 
             while (moreTOneCC == true)
   {
                 std::cout << "Interation #" << n_it+1 << std::endl;
-                TIME_MEASURE("MST Update : ", InnerBorderDectection(graph_struct, C, mst, vertex_altitudes, saddles,uf,B,mst_edges_in));
+                TIME_MEASURE("MST Update : ", mst_edges_undef = InnerBorderDectection(graph_struct, C, mst, vertex_altitudes, saddles,uf,B,mst_edges_in,mst_edges_undef));
 
                 //ConnectedComponentsLabeling(graph_struct, C, mst,uf, B);
 
@@ -438,13 +474,17 @@ namespace hg {
                 for (auto u = 0; u < num_vertices; u++) //Count CC
                 {
                     C[u] = uf.find(u);
-                    if (prev != C[u]) moreTOneCC = true;
+                    if (prev != C[u])
+                    {
+                        moreTOneCC = true;
+                        //std::cout << "More than 1" << std::endl;
+                    }
                     prev = C[u];
                     vertex_altitudes[C[u]] = std::numeric_limits<float>::max();
                     saddles[C[u]] = INT64_MAX;
                 }
 
-                TIME_MEASURE("Bassin altitude Update : ", bassin_altitude(graph_struct, C, mst, vertex_altitudes, saddles));
+                TIME_MEASURE("Bassin altitude Update : ", bassin_altitude(graph_struct, C, vertex_altitudes, saddles,mst_edges_undef));
                 TIME_MEASURE("Parent Update : ", UpdateParents(graph_struct, C, mst, saddles, B, parents, n_it,mst_edges_in));
 
                 n_it++;
